@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace ChatApp.Managers
@@ -18,7 +18,11 @@ namespace ChatApp.Managers
             DontDestroyOnLoad(gameObject);
         }
 
-        public void GoToLogin()          => SceneManager.LoadScene(SCENE_LOGIN);
+        public void GoToLogin()
+        {
+            AuthManager.Instance.Logout(null);
+            SceneManager.LoadScene(SCENE_LOGIN);
+        }
         public void GoToConversations()  => SceneManager.LoadScene(SCENE_CONV);
         public void GoToChat()           => SceneManager.LoadScene(SCENE_CHAT);
     }

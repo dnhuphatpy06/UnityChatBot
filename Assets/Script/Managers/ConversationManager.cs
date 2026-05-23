@@ -16,6 +16,7 @@ namespace ChatApp.Managers
         public event Action<List<Conversation>> OnConversationsLoaded;
         public event Action<Conversation>       OnConversationCreated;
         public event Action<string>             OnError;
+        public event Action<string> OnNetworkError;
 
         private void Awake()
         {
@@ -24,7 +25,6 @@ namespace ChatApp.Managers
             DontDestroyOnLoad(gameObject);
         }
 
-        // ── Load list ────────────────────────────────────────────────
         public void LoadConversations(string userId)
         {
             Debug.Log($"[ConversationManager] LoadConversations called. userId = {userId}");
@@ -32,13 +32,27 @@ namespace ChatApp.Managers
                 $"/api/conversations?id={userId}",
                 res =>
                 {
+                    // THÀNH CÔNG
+                    int count = res.conversations != null ? res.conversations.Length : 0;
+                    Debug.Log($"<color=green><b>[API SUCCESS]</b> Lấy danh sách tin nhắn thành công! Số lượng: {count}</color>");
+
                     Conversations = new List<Conversation>(res.conversations ?? Array.Empty<Conversation>());
                     OnConversationsLoaded?.Invoke(Conversations);
                 },
-                err => OnError?.Invoke(err)
+                err =>
+                {
+                    // LỖI TỪ SERVER (4xx, 5xx)
+                    Debug.LogError($"<color=red><b>[API SERVER ERROR]</b> Lỗi từ máy chủ:</color> {err}");
+                    OnError?.Invoke(err);
+                },
+                err =>
+                {
+                    // LỖI MẠNG (Mất kết nối, Timeout...)
+                    Debug.LogError($"<color=orange><b>[API NETWORK ERROR]</b> Lỗi mạng/đường truyền:</color> {err}");
+                    OnNetworkError?.Invoke(err);
+                }
             ));
         }
-
         // ── Create ────────────────────────────────────────────────────
         public void CreateConversation(string userId,
             Action<Conversation> onSuccess = null)
@@ -53,7 +67,8 @@ namespace ChatApp.Managers
                     OnConversationCreated?.Invoke(conv);
                     onSuccess?.Invoke(conv);
                 },
-                err => OnError?.Invoke(err)
+                err => OnError?.Invoke(err),
+                err => OnNetworkError?.Invoke(err)        // thêm
             ));
         }
 
@@ -70,7 +85,8 @@ namespace ChatApp.Managers
                     if (idx >= 0) Conversations[idx].title = newTitle;
                     onSuccess?.Invoke();
                 },
-                err => OnError?.Invoke(err)
+                err => OnError?.Invoke(err),
+                err => OnNetworkError?.Invoke(err)        // thêm
             ));
         }
 
@@ -86,7 +102,8 @@ namespace ChatApp.Managers
                         ActiveConversation = null;
                     onSuccess?.Invoke();
                 },
-                err => OnError?.Invoke(err)
+                err => OnError?.Invoke(err),
+                err => OnNetworkError?.Invoke(err)        // thêm
             ));
         }
 

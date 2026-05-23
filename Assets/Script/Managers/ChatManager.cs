@@ -18,6 +18,7 @@ namespace ChatApp.Managers
         public event Action<Message>       OnAssistantMessageReceived;
         public event Action<bool>          OnSendingStateChanged; // true = đang gửi
         public event Action<string>        OnError;
+        public event Action<string> OnNetworkError;
 
         private void Awake()
         {
@@ -26,7 +27,6 @@ namespace ChatApp.Managers
             DontDestroyOnLoad(gameObject);
         }
 
-        // ── Load messages of a conversation ──────────────────────────
         public void LoadMessages(string convId)
         {
             CurrentMessages.Clear();
@@ -37,7 +37,8 @@ namespace ChatApp.Managers
                     CurrentMessages = new List<Message>(res.messages ?? Array.Empty<Message>());
                     OnMessagesLoaded?.Invoke(CurrentMessages);
                 },
-                err => OnError?.Invoke(err)
+                err => OnError?.Invoke(err),
+                err => OnNetworkError?.Invoke(err)        // thêm
             ));
         }
 
@@ -55,7 +56,6 @@ namespace ChatApp.Managers
             };
             CurrentMessages.Add(optimistic);
             OnUserMessageAdded?.Invoke(optimistic);
-
             SetSending(true);
 
             var body = new SendMessageRequest { content = content };
@@ -63,7 +63,6 @@ namespace ChatApp.Managers
                 $"/api/conversations/{convId}/messages", body,
                 res =>
                 {
-                    // Thay thế optimistic message bằng tin nhắn thật từ server
                     var idx = CurrentMessages.FindIndex(m => m.id == optimistic.id);
                     if (idx >= 0 && res.user_message != null)
                         CurrentMessages[idx] = res.user_message;
@@ -77,9 +76,14 @@ namespace ChatApp.Managers
                 },
                 err =>
                 {
-                    // Rollback optimistic message
                     CurrentMessages.RemoveAll(m => m.id == optimistic.id);
                     OnError?.Invoke(err);
+                    SetSending(false);
+                },
+                err =>                                    // thêm
+                {
+                    CurrentMessages.RemoveAll(m => m.id == optimistic.id);
+                    OnNetworkError?.Invoke(err);
                     SetSending(false);
                 }
             ));

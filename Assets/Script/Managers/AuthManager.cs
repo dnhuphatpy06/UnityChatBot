@@ -19,6 +19,7 @@ namespace ChatApp.Managers
 
         public event Action<User>   OnLoginSuccess;
         public event Action<string> OnLoginFailed;
+        public event Action<string> OnNetworkError;
         public event Action         OnLogout;
 
         private void Awake()
@@ -41,57 +42,55 @@ namespace ChatApp.Managers
             };
         }
 
-        // ── Register ──────────────────────────────────────────────────
         public void Register(string username, string password,
             string fullname, string studentID,
-            Action<User> onSuccess, Action<string> onError)
+            Action<User> onSuccess,
+            Action<string> onServerError,
+            Action<string> onNetworkError = null)
         {
             var body = new RegisterRequest
             {
-                username  = username,
-                password  = password,
-                full_name  = fullname,
+                username = username,
+                password = password,
+                full_name = fullname,
                 student_id = studentID
             };
             StartCoroutine(APIClient.Instance.Post<User>(
                 "/api/register", body,
                 user => { SaveSession(user); onSuccess?.Invoke(user); },
-                err  => { onError?.Invoke(ParseError(err)); }
+                err => { onServerError?.Invoke(ParseError(err)); },
+                err => { onNetworkError?.Invoke(err); OnNetworkError?.Invoke(err); }
             ));
         }
 
-        // ── Login ─────────────────────────────────────────────────────
         public void Login(string username, string password,
-            Action<User> onSuccess, Action<string> onError)
+            Action<User> onSuccess,
+            Action<string> onServerError,
+            Action<string> onNetworkError = null)
         {
             var body = new LoginRequest { username = username, password = password };
             Debug.Log("CALL API POST /api/login");
             StartCoroutine(APIClient.Instance.Post<User>(
                 "/api/login", body,
-                user => {
-                    Debug.Log("LOGIN SUCCESS");
-                    Debug.Log("USER: " + user.username); 
-                    SaveSession(user); onSuccess?.Invoke(user); 
-                },
-                err  => { Debug.LogError("LOGIN ERROR: " + err); onError?.Invoke(ParseError(err)); }
+                user => { SaveSession(user); onSuccess?.Invoke(user); },
+                err => { onServerError?.Invoke(ParseError(err)); },
+                err => { onNetworkError?.Invoke(err); OnNetworkError?.Invoke(err); }
             ));
         }
 
-        // ── Guest login ───────────────────────────────────────────────
-        public void LoginAsGuest(Action<User> onSuccess, Action<string> onError)
+        public void LoginAsGuest(
+            Action<User> onSuccess,
+            Action<string> onServerError,
+            Action<string> onNetworkError = null)
         {
             StartCoroutine(APIClient.Instance.Post<User>(
                 "/api/guest", new object(),
-                user =>
-                {
-                    SaveSession(user, isGuest: true);
-                    onSuccess?.Invoke(user);
-                },
-                err => { onError?.Invoke(ParseError(err)); }
+                user => { SaveSession(user, isGuest: true); onSuccess?.Invoke(user); },
+                err => { onServerError?.Invoke(ParseError(err)); },
+                err => { onNetworkError?.Invoke(err); OnNetworkError?.Invoke(err); }
             ));
         }
 
-        // ── Logout ────────────────────────────────────────────────────
         public void Logout(Action onDone = null)
         {
             if (CurrentUser == null) { onDone?.Invoke(); return; }
@@ -99,11 +98,12 @@ namespace ChatApp.Managers
             bool isGuest = PlayerPrefs.GetInt(KEY_IS_GUEST, 0) == 1;
             if (isGuest)
             {
-                // Xoá guest session trên server
                 string guestId = CurrentUser.id;
                 StartCoroutine(APIClient.Instance.Delete<DeleteResponse>(
                     $"/api/guest/{guestId}",
-                    _ => { }, _ => { } // bỏ qua lỗi khi logout
+                    _ => { },   // onSuccess  — bỏ qua
+                    _ => { },   // onServerError — bỏ qua
+                    _ => { }    // onNetworkError — bỏ qua
                 ));
             }
             ClearSession();
